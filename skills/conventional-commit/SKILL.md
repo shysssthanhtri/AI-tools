@@ -13,21 +13,20 @@ description: 'Prompt and workflow for generating conventional commit messages us
 
 **Follow these steps:**
 
-1. Run `git status` to review changed files.
-2. Run `git diff` or `git diff --cached` to inspect changes.
+1. Run `git diff --cached` to inspect **only staged changes** — this is the sole basis for the commit message.
+2. If there are no staged changes, stop and inform the user: no staged changes detected. Suggest running `git add <file>` first.
 3. Inspect the current branch name (`git branch --show-current`) and extract the ticket ID when the branch matches `feature/{ticket-id}-ticket-title`.
 4. If a ticket ID is found, use it as `<ticket-id>` (for example, branch `feature/BK-123-add-login` -> ticket ID `BK-123`).
 5. If no ticket ID is found (for example, branch `feature/commit-message`), skip the ticket ID and generate the commit message without scope: `type: description`.
-6. Stage your changes with `git add <file>`.
-7. Construct your commit message using the following XML structure.
-8. After generating your commit message, Copilot will automatically run the following command in your integrated terminal (no confirmation needed):
+6. Construct your commit message **based solely on the staged diff** using the following XML structure.
+7. After generating your commit message, Copilot will automatically run the following command in your integrated terminal (no confirmation needed):
 
 ```bash
 git commit -m "type(ticket-id): description" # when ticket ID exists
 git commit -m "type: description"            # when ticket ID is unavailable
 ```
 
-9. Just execute this prompt and Copilot will handle the commit for you in the terminal.
+8. Just execute this prompt and Copilot will handle the commit for you in the terminal.
 
 ### Commit Message Structure
 

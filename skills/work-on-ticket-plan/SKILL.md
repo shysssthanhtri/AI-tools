@@ -1,6 +1,6 @@
 ---
 name: work-on-ticket-plan
-description: 'Execute an existing Jira ticket implementation plan phase by phase. Use when asked to "work on ticket CM-1234", "implement the plan for CM-1234", "start working on the plan", or "execute the next phase". Reads the plan from docs/<ticket-id>/plan.md, presents each phase for user approval before coding, updates progress after each phase, and operates inside the dedicated git worktree.'
+description: 'Execute an existing Jira ticket implementation plan phase by phase. Use when asked to "work on ticket CM-1234", "implement the plan for CM-1234", "start working on the plan", or "execute the next phase". Reads the plan from docs/<ticket-id>/plan.md, presents each phase for user approval before coding, updates progress after each phase, and operates inside the dedicated git worktree. After the last phase is complete, presents a full change summary for user review and then creates a GitHub draft PR using the create-draft-pr skill.'
 ---
 
 # Work on Ticket Plan
@@ -155,8 +155,34 @@ After implementing the phase, present a completion summary to the user:
 **Progress:** Phase <N> of <total> complete.
 
 ---
-Please review the changes. When ready, reply **next** to proceed to Phase <N+1>, or provide feedback.
+Please review the changes. When ready, reply **commit** to commit this phase's changes, or provide feedback.
 ```
+
+**Do NOT start the next phase until the phase changes have been committed.**
+
+---
+
+### Step 5b — Commit Phase Changes
+
+After the user approves the phase output:
+
+1. Stage only the files changed in this phase:
+
+   ```bash
+   git add <files changed in this phase>
+   ```
+
+2. Load and follow the `conventional-commit` skill to generate and execute the commit message.
+   - The commit should cover only this phase's changes.
+   - The commit type should reflect the nature of the work (e.g. `feat`, `fix`, `refactor`, `test`).
+
+3. After the commit is made, present a brief confirmation:
+
+   ```
+   ✅ Phase <N> changes committed.
+
+   Ready to proceed to Phase <N+1>. Reply **next** to continue, or provide feedback.
+   ```
 
 **Do NOT start the next phase until the user explicitly replies to proceed.**
 
@@ -164,10 +190,67 @@ Please review the changes. When ready, reply **next** to proceed to Phase <N+1>,
 
 ### Step 6 — Repeat for Each Phase
 
-Repeat Steps 3–5 for each subsequent phase, always:
+Repeat Steps 3–5b for each subsequent phase, always:
 - Presenting task details and waiting for approval before coding.
 - Updating progress both at the start and end of each phase.
-- Waiting for user sign-off before advancing.
+- Committing only the current phase's changes using the `conventional-commit` skill before advancing.
+- Waiting for user sign-off before starting the next phase.
+
+---
+
+### Step 7 — Final Summary (After Last Phase)
+
+Once all phases have been completed and committed, present a comprehensive summary of all changes made across the entire implementation:
+
+```
+## 🎉 Implementation Complete: <ticket-id>
+
+All phases of the implementation plan have been completed.
+
+---
+
+### Summary of Changes
+
+**Phases completed:** <N> of <N>
+
+**All files changed:**
+
+| File | Action | Phase | Description |
+|------|--------|-------|-------------|
+| `path/to/file` | Modified | Phase 1 | <what changed> |
+| `path/to/file` | Created  | Phase 2 | <what changed> |
+
+**Tests added/updated:**
+
+| Test file | Type | What it verifies |
+|-----------|------|-----------------|
+| `path/to/test` | Unit | <description> |
+
+**Key decisions made:**
+- <any notable implementation decision or deviation from the original plan>
+
+---
+
+Please review the complete summary above.
+Reply **create PR** to open a draft pull request, or provide feedback if further changes are needed.
+```
+
+**Do NOT create the PR until the user explicitly approves the summary.**
+
+---
+
+### Step 8 — Create Draft PR
+
+Once the user approves the final summary (replies "create PR" or equivalent):
+
+Load and follow the `create-draft-pr` skill to create the GitHub draft pull request.
+
+Pass the ticket ID so the skill can:
+- Build the PR title and description from the ticket details and code diff
+- Create the PR as a draft
+- Assign it to the current user
+
+After the PR is created, confirm with the URL and status reported by the `create-draft-pr` skill.
 
 ---
 
@@ -197,7 +280,7 @@ All phases have been implemented successfully.
 **Next steps:**
 - Review `docs/<ticket-id>/progress.md` for full details.
 - Run the full test suite to confirm nothing is broken.
-- Commit changes and open a pull request.
+- Open a pull request.
 ```
 
 ---
