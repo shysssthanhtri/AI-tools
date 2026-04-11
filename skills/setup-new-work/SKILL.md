@@ -1,22 +1,22 @@
 ---
 name: setup-new-work
-description: "Use when starting work on a Jira ticket. Fetches ticket details via Atlassian MCP, creates an isolated git worktree workspace, and stores a summarized ticket document locally for reference."
+description: "Use when starting work on a Jira ticket. Fetches ticket details via Atlassian MCP (for branch naming and a local story snapshot), creates an isolated git worktree with branch feature/<ticket-id>-<slug>-<platform>, and writes docs/<ticket-id>/<ticket-id>.md in the worktree."
 allowed-tools: Bash(git:*) mcp_com_atlassian_getAccessibleAtlassianResources mcp_com_atlassian_getJiraIssue
 ---
 
 # Setup New Work
 
-Set up a clean, isolated workspace for a Jira ticket by creating a git worktree and storing summarized ticket details locally.
+Set up a clean, isolated workspace for a Jira ticket by creating a git worktree and a feature branch that includes the AI platform in the name.
 
 ## Role
 
-You are a senior software engineer who values clean, isolated workspaces. Before writing any code you want to fully understand the ticket, have an isolated branch and worktree, and keep a local copy of the ticket details for quick reference.
+You are a senior software engineer who values clean, isolated workspaces. Before writing any code you want an isolated branch and worktree. You fetch the ticket to derive a branch slug from the summary **and** to persist a local story snapshot next to that work. You do **not** create `plan.md`, `progress.md`, or other planning artefacts here—the **plan-jira-ticket** skill owns those.
 
 ## Objectives
 
 1. **Prepare a clean, isolated workspace** — Create a new git worktree so work is physically separated from other in-progress tasks.
-2. **Understand the ticket** — Fetch and read the full Jira ticket (summary, description, acceptance criteria, subtasks, comments).
-3. **Store ticket details locally** — Write a structured Markdown summary into a well-defined docs folder inside the worktree.
+2. **Name the branch from the ticket** — Fetch the Jira issue to read the summary and build a deterministic slug; use it with the ticket id and platform in the branch name.
+3. **Store story details locally** — Write `docs/<ticket-id>/<ticket-id>.md` inside the new worktree with a team-usable brief (summary, description, status, priority, type, people, labels, parent/epic, subtasks, links, timestamps, and notes). Match the intent of **plan-jira-ticket** Step 1b so planning can assume the file exists.
 
 ## Rules
 
@@ -30,7 +30,7 @@ You are a senior software engineer who values clean, isolated workspaces. Before
 - The worktree folder must be located at `./worktrees/<ticket-id>-<platform>` relative to the current repository root, where `<platform>` is the detected or user-specified AI platform name (see [Parameters](#parameters)).
   - Example: if the repo is at `/Users/dev/repos/bridge-keeper` and platform is `copilot`, the worktree is at `/Users/dev/repos/bridge-keeper/worktrees/CM-4873-copilot`.
   - Example: if platform is `cursor`, the worktree is at `/Users/dev/repos/bridge-keeper/worktrees/CM-4873-cursor`.
-- The branch name format is: `feature/<ticket-id>-<slug>` where `<slug>` is a 3–5 word summary derived from the Jira ticket summary.
+- The branch name format is: `feature/<ticket-id>-<slug>-<platform>` where `<slug>` is a 3–5 word summary derived from the Jira ticket summary, and `<platform>` matches the worktree folder suffix.
 - Slug rules (same as create-branch skill):
   - Lowercase.
   - Replace `&` with `and`.
@@ -40,10 +40,10 @@ You are a senior software engineer who values clean, isolated workspaces. Before
   - Keep first 3–5 meaningful words. Max slug length 32 characters.
   - If slug is empty after normalisation, use `work-item`.
 
-### Ticket Documentation
+### Out of scope
 
-- Ticket summary document must be saved at `docs/<ticket-id>/<ticket-id>.md` inside the new worktree.
-- The document must follow the template defined in the [Ticket Summary Template](#ticket-summary-template) section.
+- Do **not** create `plan.md` or `progress.md`, or run a full codebase planning pass—that is **plan-jira-ticket**.
+- **In scope:** the single ticket snapshot file `docs/<ticket-id>/<ticket-id>.md` inside the worktree (not optional).
 
 ## Workflow
 
@@ -58,18 +58,7 @@ Call `mcp_com_atlassian_getJiraIssue` with:
 - `issueIdOrKey` = the ticket key provided by the user
 - `responseContentFormat` = `markdown`
 
-Extract from the response:
-- **Summary** (title)
-- **Description**
-- **Status**
-- **Priority**
-- **Issue Type**
-- **Assignee**
-- **Reporter**
-- **Labels**
-- **Sprint** (if present)
-- **Acceptance Criteria** (often in description or a custom field)
-- **Subtasks / Linked Issues** (if any)
+From the response, capture at least **Summary** (for the slug), **Status**, and enough fields to populate `docs/<ticket-id>/<ticket-id>.md` (e.g. description, priority, type, assignee, reporter, labels, parent, subtasks, issuelinks, components, fixVersions, created/updated). Request additional `fields` from the API if the default payload is thin.
 
 If the Jira lookup fails, stop and ask the user to verify the ticket key.
 
@@ -144,10 +133,10 @@ echo "$platform"
 
 	```bash
 	mkdir -p "$repo_root/worktrees"
-	git worktree add -b "feature/<ticket-id>-<slug>" "$repo_root/worktrees/<ticket-id>-<platform>" HEAD
+	git worktree add -b "feature/<ticket-id>-<slug>-<platform>" "$repo_root/worktrees/<ticket-id>-<platform>" HEAD
 	```
 
-	This creates the branch from the current HEAD and checks it out in the new worktree directory.
+	This creates the branch from the current HEAD and checks it out in the new worktree directory. The branch name includes the same `<platform>` suffix as the worktree folder.
 
 3. Verify the worktree was created:
 
@@ -155,17 +144,16 @@ echo "$platform"
 	git worktree list
 	```
 
-### Step 6 — Store Ticket Details
+### Step 5b — Write local story snapshot
 
-1. Create the docs directory inside the new worktree:
+Inside the **worktree** (not the main repo root unless they are the same), create the ticket brief:
 
-	```bash
-	mkdir -p "$repo_root/worktrees/<ticket-id>-<platform>/docs/<ticket-id>"
-	```
+1. `mkdir -p "$repo_root/worktrees/<ticket-id>-<platform>/docs/<ticket-id>"`
+2. Write `$repo_root/worktrees/<ticket-id>-<platform>/docs/<ticket-id>/<ticket-id>.md` using the Jira data from Step 2. Structure it as a readable brief: title, summary, type/status/priority, people, description (or “none”), labels, parent epic, subtasks, linked issues, sprint/acceptance criteria if present in the API, Jira timestamps, and a short **Notes** section (e.g. regenerate if Jira changes).
 
-2. Write the ticket summary document at `docs/<ticket-id>/<ticket-id>.md` using the template below.
+If a file already exists at that path, overwrite only when re-running setup for the same ticket and the user expects a refresh; otherwise skip or ask.
 
-### Step 7 — Confirm Setup
+### Step 6 — Confirm Setup
 
 Print a summary to the user:
 
@@ -175,45 +163,8 @@ Print a summary to the user:
   Ticket:    <ticket-id> — <summary>
   Platform:  <platform>
   Worktree:  ./worktrees/<ticket-id>-<platform>
-  Branch:    feature/<ticket-id>-<slug>
-  Docs:      docs/<ticket-id>/<ticket-id>.md
-```
-
-## Ticket Summary Template
-
-```markdown
-# <ticket-id>: <Summary>
-
-| Field       | Value            |
-|-------------|------------------|
-| Status      | <status>         |
-| Priority    | <priority>       |
-| Type        | <issue-type>     |
-| Assignee    | <assignee>       |
-| Reporter    | <reporter>       |
-| Labels      | <labels>         |
-| Sprint      | <sprint>         |
-
-## Description
-
-<Full description from Jira, in Markdown>
-
-## Acceptance Criteria
-
-<Acceptance criteria extracted from Jira, as a checklist>
-
-- [ ] Criterion 1
-- [ ] Criterion 2
-
-## Subtasks / Linked Issues
-
-| Key       | Summary              | Status   |
-|-----------|----------------------|----------|
-| <key>     | <summary>            | <status> |
-
-## Notes
-
-<Empty section for the engineer to add working notes>
+  Branch:    feature/<ticket-id>-<slug>-<platform>
+  Story:     ./worktrees/<ticket-id>-<platform>/docs/<ticket-id>/<ticket-id>.md
 ```
 
 ## Configuration Reference
@@ -230,8 +181,7 @@ Print a summary to the user:
 | Setting             | Value                                          |
 |---------------------|------------------------------------------------|
 | Worktree folder     | `./worktrees/<ticket-id>-<platform>`           |
-| Branch format       | `feature/<ticket-id>-<slug>`                   |
-| Docs path           | `docs/<ticket-id>/<ticket-id>.md`              |
+| Branch format       | `feature/<ticket-id>-<slug>-<platform>`          |
 | Max slug length     | 32 characters                                  |
 | Slug word count     | 3–5 meaningful words                           |
 | Platform detection  | Auto: `cursor` or `copilot` from env vars      |
@@ -244,8 +194,7 @@ Summary: "Add retry logic for payment webhooks"
 
 ```
 Worktree:  ./worktrees/CM-4873-copilot
-Branch:    feature/CM-4873-add-retry-logic-payment-webhooks
-Docs:      docs/CM-4873/CM-4873.md
+Branch:    feature/CM-4873-add-retry-logic-payment-webhooks-copilot
 ```
 
 ### Example 2 — Ticket `ENG-101`, platform `cursor`
@@ -254,17 +203,17 @@ Summary: "Fix the broken & flaky CI pipeline tests"
 
 ```
 Worktree:  ./worktrees/ENG-101-cursor
-Branch:    feature/ENG-101-fix-broken-and-flaky-ci
-Docs:      docs/ENG-101/ENG-101.md
+Branch:    feature/ENG-101-fix-broken-and-flaky-ci-cursor
 ```
 
 ## Final Checklist
 
 Before reporting completion, verify all of the following:
 
-- [ ] Jira ticket was fetched successfully and details are accurate.
+- [ ] Jira ticket was fetched successfully (at least summary for slug).
 - [ ] Git worktree exists at `./worktrees/<ticket-id>-<platform>`.
-- [ ] Branch `feature/<ticket-id>-<slug>` is checked out in the worktree.
-- [ ] `docs/<ticket-id>/<ticket-id>.md` exists in the worktree with complete ticket details.
+- [ ] Branch `feature/<ticket-id>-<slug>-<platform>` is checked out in the worktree.
 - [ ] Platform was correctly detected or provided.
+- [ ] `docs/<ticket-id>/<ticket-id>.md` exists in the worktree with story details from Jira.
+- [ ] No `plan.md` or `progress.md` was created by this skill (those belong to plan-jira-ticket).
 - [ ] No uncommitted or unrelated changes were carried into the new worktree.

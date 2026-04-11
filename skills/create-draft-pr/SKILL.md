@@ -1,7 +1,7 @@
 ---
 name: create-draft-pr
 description: 'Create a GitHub draft pull request for a Jira ticket. Use when asked to "create a PR", "open a draft PR", "submit a pull request", or "create a draft pull request" after finishing implementation. Reads local ticket details, summarises changes, creates a draft PR via GitHub MCP, and assigns it to the current user. Requires setup-new-work to have been run first.'
-allowed-tools: mcp_com_atlassian_getAccessibleAtlassianResources mcp_com_atlassian_getJiraIssue mcp_io_github_git_create_pull_request mcp_io_github_git_get_me mcp_git_git_diff mcp_git_git_log mcp_git_git_status mcp_git_git_branch
+allowed-tools: mcp_com_atlassian_getAccessibleAtlassianResources mcp_com_atlassian_getJiraIssue mcp_io_github_git_create_pull_request mcp_io_github_git_update_pull_request mcp_io_github_git_get_me mcp_git_git_diff mcp_git_git_log mcp_git_git_status mcp_git_git_branch run_in_terminal
 ---
 
 # Create Draft PR
@@ -20,7 +20,7 @@ You are a senior software engineer who writes clear, informative pull requests. 
 
 ## Prerequisites
 
-- `setup-new-work` skill has been run — the worktree exists at `./worktrees/<ticket-id>-<platform>/` and the ticket document exists at `docs/<ticket-id>/<ticket-id>.md`
+- `setup-new-work` skill has been run — the worktree exists at `./worktrees/<ticket-id>-<platform>/` and the branch is `feature/<ticket-id>-<slug>-<platform>`. A local ticket doc under `docs/<ticket-id>/` is optional (another skill may create it); if missing, fetch ticket details from Jira in Step 2.
 - Changes have been committed to the feature branch
 - GitHub MCP is available (`mcp_io_github_git_*` tools)
 - Atlassian MCP is available (to enrich ticket details if needed)
@@ -64,16 +64,35 @@ cd "$worktree"
 
 ---
 
+### Step 1b — Publish Branch (if not yet pushed)
+
+Before creating a PR, the feature branch **must exist on the remote**. Check whether the branch has been published:
+
+```bash
+git ls-remote --heads origin $(git branch --show-current)
+```
+
+- If the command returns **output** (a SHA + ref), the branch is already published — continue.
+- If the command returns **no output**, the branch has not been pushed yet. Publish it:
+
+```bash
+git push --set-upstream origin $(git branch --show-current)
+```
+
+Confirm the push succeeded before proceeding. If the push fails (e.g. permissions error), stop and report the error to the user.
+
+---
+
 ### Step 2 — Read Ticket Details
 
-1. Read `docs/<ticket-id>/<ticket-id>.md` completely from the worktree.
-2. Extract:
+1. If `docs/<ticket-id>/<ticket-id>.md` exists in the worktree (e.g. from another skill), read it completely. Otherwise skip to fetching from Jira below.
+2. When you have content (from file or Jira), extract:
    - **Summary** — one-line ticket title
    - **Description** — full problem context
    - **Acceptance Criteria** — definition of done
    - **Ticket URL** — construct from ticket key: `https://theiconic.atlassian.net/browse/<ticket-id>`
 
-If the local file is missing or lacks detail, fetch from Jira:
+If there is no local file or it lacks detail, fetch from Jira:
 
 ```
 mcp_com_atlassian_getAccessibleAtlassianResources  → get cloudId
@@ -232,5 +251,6 @@ Status:   Draft
 | Ticket ID not found | Provide it explicitly or check `git branch --show-current` |
 | Worktree not found | Run the `setup-new-work` skill first |
 | No commits ahead of base | Commit your changes before creating a PR |
+| Branch not on remote | Step 1b will auto-push; if it fails check your remote access |
 | MCP GitHub auth error | Ensure the GitHub MCP server is connected and authenticated |
 | PR creation fails with 422 | A PR may already exist for this branch — check open PRs |
